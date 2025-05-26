@@ -12,9 +12,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-import javax.swing.text.html.Option;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -54,7 +52,7 @@ public class EmailService {
 
     private String getTransactionText(Map<String, Object> transactionObject) {
         return "Dear Customer,\n\n" +
-                "Your account " +transactionObject.get("accountNumber")+" has been "+ transactionObject.get("transactionType").toString().toLowerCase() +
+                "Your account " + maskAccountNumber(transactionObject.get("accountNumber").toString()) +" has been "+ transactionObject.get("transactionType").toString().toLowerCase()+"ed" +
                 " for amount of INR " + transactionObject.get("transactionAmount")+
                 ". The Payment was initiated through Transaction ID: "+ transactionObject.get("transactionId").toString() + " on "+
                 transactionObject.get("transactionDate")+ ".\n\n" +
@@ -65,6 +63,11 @@ public class EmailService {
                 "This is a auto-generated e-mail, please do not reply to this e-mail";
 
     }
-
-
+    private String maskAccountNumber(String accountNumber){
+        StringBuilder stringBuilder= new StringBuilder();
+        stringBuilder.append("XXXXXX");
+        stringBuilder.append(accountNumber.substring(8));
+        System.out.println(stringBuilder);
+        return new String(stringBuilder);
+    }
 }
