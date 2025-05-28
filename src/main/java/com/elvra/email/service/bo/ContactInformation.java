@@ -1,4 +1,4 @@
-package com.banking.email.service.bo;
+package com.elvra.email.service.bo;
 
 import jakarta.persistence.*;
 

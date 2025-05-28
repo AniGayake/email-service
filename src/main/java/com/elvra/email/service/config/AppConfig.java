@@ -1,4 +1,4 @@
-package com.banking.email.service.config;
+package com.elvra.email.service.config;
 
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;

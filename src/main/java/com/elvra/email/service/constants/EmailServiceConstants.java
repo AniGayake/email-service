@@ -1,4 +1,4 @@
-package com.banking.email.service.constants;
+package com.elvra.email.service.constants;
 
 import org.apache.kafka.common.protocol.types.Field;
 

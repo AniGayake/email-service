@@ -1,7 +1,5 @@
-package com.banking.email.service;
+package com.elvra.email.service;
 
-import com.banking.email.service.email.EmailService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

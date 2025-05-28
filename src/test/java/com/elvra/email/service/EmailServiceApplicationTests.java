@@ -1,4 +1,4 @@
-package com.banking.email.service;
+package com.elvra.email.service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

@@ -1,7 +1,7 @@
-package com.banking.email.service.email;
+package com.elvra.email.service.email;
 
-import com.banking.email.service.bo.ContactInformation;
-import com.banking.email.service.repository.ContactRepository;
+import com.elvra.email.service.bo.ContactInformation;
+import com.elvra.email.service.repository.ContactRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,12 +16,11 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
-import static com.banking.email.service.constants.EmailServiceConstants.*;
+import static com.elvra.email.service.constants.EmailServiceConstants.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
