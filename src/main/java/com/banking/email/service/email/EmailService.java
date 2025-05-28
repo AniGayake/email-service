@@ -3,15 +3,24 @@ package com.banking.email.service.email;
 import com.banking.email.service.bo.ContactInformation;
 import com.banking.email.service.repository.ContactRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
+import static com.banking.email.service.constants.EmailServiceConstants.*;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,49 +29,89 @@ public class EmailService {
     private static final Logger LOGGER = LoggerFactory.getLogger(EmailService.class);
     private JavaMailSender mailSender;
     private ContactRepository contactRepository;
+    private MessageSource messageSource;
+    @Value("${from.email}")
+    private String fromEmail;
 
     @Autowired
-    public EmailService(JavaMailSender mailSender, ContactRepository contactRepository) {
+    public EmailService(JavaMailSender mailSender, ContactRepository contactRepository,MessageSource messageSource) {
         this.mailSender = mailSender;
         this.contactRepository = contactRepository;
+        this.messageSource=messageSource;
     }
 
-    @KafkaListener(topics = "TRANSACTION",groupId = "email-service")
-    public void sendSimpleEmail(String transaction) throws JsonProcessingException {
+    @KafkaListener(topics = {TRANSACTION_TOPIC,CUSTOMER_ONBOARDING_TOPIC},groupId = "email-service")
+    public void sendEmail(String kafkaMessage, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) throws JsonProcessingException {
 
-        ObjectMapper mapper= new ObjectMapper();
-        Optional<ContactInformation> contactInformation=null;
-        Map<String,Object> transactionObject = mapper.readValue(transaction,Map.class);
-        String customerId = transactionObject.get("customerId").toString();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(kafkaMessage);
+        Optional<ContactInformation> contactInformation = null;
+        String customerId = root.get("customerId").toString();
 
-        if (null!=transactionObject.get("customerId")){
-         contactInformation  =  contactRepository.findByCustomerId(Long.parseLong(customerId));
+        if (null != customerId) {
+            contactInformation = contactRepository.findByCustomerId(Long.parseLong(customerId));
         }
-        if (null!=contactInformation && contactInformation.isPresent()){
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("anigayake101@gmail.com");
-            message.setTo(contactInformation.get().getEmail());
-            message.setSubject("Transaction Alert for your Apna Bank Mobile Banking");
-            message.setText(getTransactionText(transactionObject));
-            mailSender.send(message);
-            System.out.println(transaction);
-            LOGGER.info("Email Sent Successfully");
+
+        if (null != contactInformation && contactInformation.isPresent()) {
+            send(contactInformation.get().getEmail(), root);
         }
-    }
-
-    private String getTransactionText(Map<String, Object> transactionObject) {
-        return "Dear Customer,\n\n" +
-                "Your account " + maskAccountNumber(transactionObject.get("accountNumber").toString()) +" has been "+ transactionObject.get("transactionType").toString().toLowerCase()+"ed" +
-                " for amount of INR " + transactionObject.get("transactionAmount")+
-                ". The Payment was initiated through Transaction ID: "+ transactionObject.get("transactionId").toString() + " on "+
-                transactionObject.get("transactionDate")+ ".\n\n" +
-                "\n In case you have not done this transaction, please call our Customer care.\n"+
-                "\n\nNever share your OTP, PIN URN, CVV or passwords with anyone even if the person claims to be a Bank Employee.\n"+
-                "\nSincerely,\n"+
-                "Team Apna bank\n\n" +
-                "This is a auto-generated e-mail, please do not reply to this e-mail";
 
     }
+
+    private void send(String toEmail, JsonNode kafkaMessageRoot) {
+        String subject = "";
+        String messageTextBody="";
+
+        if (null!=kafkaMessageRoot.get("transactionId")){
+            subject= messageSource.getMessage("transaction.alert.email.subject.template",null,Locale.ENGLISH);
+            messageTextBody=buildTransactionAlertMessage(kafkaMessageRoot);
+        }else if (null!=kafkaMessageRoot.get("type")&&"CUSTOMER_ONBOARDING".equalsIgnoreCase(kafkaMessageRoot.get("type").asText())){
+            subject=messageSource.getMessage("customer-onboarding.alert.email.subject.template",null,Locale.ENGLISH);
+            messageTextBody=buildCustomerWelcomeAlertMessage(kafkaMessageRoot);
+        }
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromEmail);
+        message.setTo(toEmail);
+        message.setSubject(subject);
+        message.setText(messageTextBody);
+        mailSender.send(message);
+        LOGGER.info("Email Sent Successfully");
+    }
+
+    private String buildCustomerWelcomeAlertMessage(JsonNode transactionObject) {
+        String customerId = transactionObject.get("customerId").asText();
+        LOGGER.info("Sending Email to the customer with customerId {}",customerId);
+        String customerFirstname = transactionObject.get("customerFirstname").asText();
+        return messageSource.getMessage("customer-onboarding.alert.email.body.template",
+                new Object[]{customerFirstname,customerId},
+                Locale.ENGLISH
+                );
+    }
+
+    private String buildTransactionAlertMessage(JsonNode transactionObject){
+        Object dateInObjectFormat = transactionObject.get("transactionDate");
+        LocalDateTime txnTimestamp = null;
+        if( dateInObjectFormat instanceof List){
+            List<Integer> dateList =(List<Integer>) dateInObjectFormat;
+            txnTimestamp = LocalDateTime.of(
+                    dateList.get(0),
+                    dateList.get(1),
+                    dateList.get(2),
+                    dateList.get(3),
+                    dateList.get(4)
+            );
+        }
+        String amount = String.format("%.2f",Double.parseDouble(transactionObject.get("transactionAmount").asText()));
+       return messageSource.getMessage("transaction.alert.email.body.template",
+               new Object[]{maskAccountNumber(transactionObject.get("accountNumber").asText()),
+                       transactionObject.get("transactionType").asText().toLowerCase(),
+                       amount,
+                       transactionObject.get("transactionId").asText(),
+                       txnTimestamp},
+                Locale.ENGLISH);
+    }
+
     private String maskAccountNumber(String accountNumber){
         StringBuilder stringBuilder= new StringBuilder();
         stringBuilder.append("XXXXXX");
